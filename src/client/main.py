@@ -362,7 +362,7 @@ class SessionController(object):
         print("saved as :"+vidPath)
 
         if ffmpeg_backend:
-            cmt = ['ffmpeg', '-y', '-rtbufsize', '2000M', '-f', 'dshow', '-r', '120', '-i', 'video=HD USB Camera', '-c:v', 'libx264', '-preset', 'superfast', '-vf', 'hue=s=0', tempPath]
+            cmd = ['ffmpeg', '-y', '-rtbufsize', '2000M', '-f', 'dshow', '-r', '120', '-i', 'video=HD USB Camera', '-c:v', 'libx264', '-preset', 'superfast', '-vf', 'hue=s=0', tempPath]
             p = Popen(cmd, stdin=PIPE)
 
         else:
@@ -533,8 +533,10 @@ class SessionController(object):
         p.stdin.flush()
         time.sleep(2)
         p.terminate()
-        for line in p.stdout.readlines():
-            print(line)
+
+        if not ffmpeg_backend:
+            for line in p.stdout.readlines():
+                print(line)
         # Log session information.
         while is_locked(tempPath):
             time.sleep(1)
