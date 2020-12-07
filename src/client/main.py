@@ -26,6 +26,10 @@ import ctypes
 # set to True if you want to use object detection mobilenet to decide when
 #  to lower the arm
 use_detector = False
+ffmpeg_backend = True
+
+if ffmpeg_backend:
+    use_detector = False
 
 # This is the max time the arm can idle in the up position before lowering
 #  (only needed when use_detector == True)
@@ -356,11 +360,17 @@ class SessionController(object):
 
 
         print("saved as :"+vidPath)
-        if "TEST" in profile.name:
-            print("Its testing")
-            p = Popen(["python", "driver_for_a_better_camera.py", "--c", str(0), "--p", tempPath, "--t", "True"], stdin=PIPE, stdout=PIPE)
+
+        if ffmpeg_backend:
+            cmt = ['ffmpeg', '-y', '-rtbufsize', '2000M', '-f', 'dshow', '-r', '120', '-i', 'video=HD USB Camera', '-c:v', 'libx264', '-preset', 'superfast', '-vf', 'hue=s=0', tempPath]
+            p = Popen(cmd, stdin=PIPE)
+
         else:
-            p = Popen(["python", "driver_for_a_better_camera.py", "--c", str(0), "--p", tempPath, "--t", "False"], stdin=PIPE, stdout=PIPE)
+            if "TEST" in profile.name:
+                print("Its testing")
+                p = Popen(["python", "driver_for_a_better_camera.py", "--c", str(0), "--p", tempPath, "--t", "True"], stdin=PIPE, stdout=PIPE)
+            else:
+                p = Popen(["python", "driver_for_a_better_camera.py", "--c", str(0), "--p", tempPath, "--t", "False"], stdin=PIPE, stdout=PIPE)
         # Tell server to move stepper to appropriate position for current profile
         self.arduino_client.serialInterface.write(b'3')
 
@@ -383,6 +393,8 @@ class SessionController(object):
         SEED_FLAG = False
 
         def check_deetction_frame():
+            if ffmpeg_backend:
+                return True
             try:
                 os.rename("detection_frame.jpg", "detection_frame.jpg")
                 if os.path.getsize("detection_frame.jpg") > 10:
@@ -392,6 +404,8 @@ class SessionController(object):
                 return False
 
         def detect(p):
+            if ffmpeg_backend:
+                return True
             '''
             Wait for real code
             :return:
@@ -477,18 +491,20 @@ class SessionController(object):
                     if not SEED_FLAG:
                         self.arduino_client.serialInterface.write(b'1')
                         self.arduino_client.serialInterface.flushOutput()
+                        raise_moment = datetime.datetime.now()
+                        display_time_stamp_list.append(raise_moment)
                         trial_count += 1
                         time.sleep(4)
-                        if detect(p):
-                            SEED_FLAG = False # do cycling all the time
-                            if "TEST" in profile.name:
-                                SEED_FLAG = False
-                            raise_moment = datetime.datetime.now()
-                            display_time_stamp_list.append(raise_moment)
-                            successful_count += 1
-                        else:
-                            SEED_FLAG = False
-                    print("Total trial: %d, successful trial: %d, Percentage; %.3f" % (trial_count, successful_count, float(successful_count) / float(trial_count)))
+                        # if True:
+                        # # if detect(p):
+                        #     SEED_FLAG = False # do cycling all the time
+                        #     if "TEST" in profile.name:
+                        #         SEED_FLAG = False
+
+                        #     successful_count += 1
+                        # else:
+                        #     SEED_FLAG = False
+                    # print("Total trial: %d, successful trial: %d, Percentage; %.3f" % (trial_count, successful_count, float(successful_count) / float(trial_count)))
                 else:
                     if (datetime.datetime.now() - raise_moment).seconds >= 5:
                         if profile.dominant_hand == "LEFT":
@@ -513,8 +529,10 @@ class SessionController(object):
                         self.arduino_client.serialInterface.flushInput()
                         break
 
-        p.stdin.write(b"stop\n")
+        p.stdin.write(b"q")
         p.stdin.flush()
+        time.sleep(2)
+        p.terminate()
         for line in p.stdout.readlines():
             print(line)
         # Log session information.
